@@ -1,33 +1,22 @@
-# Lannkz YouTube Packaging & Retention Analysis
 
-## Project Objective
+## Main Research Question
 
-Analyze historical performance data from the Lannkz YouTube channel to understand what factors are associated with viewers clicking on videos and continuing to watch them, then use those findings to make evidence-based recommendations for future uploads.
+How are football relevance and release relevance
+associated with click-through rate, viewer retention,
+and engaged views on Lannkz?
 
-## Core Business Question
+## Supporting Questions
 
-What makes people click on my videos, what makes them stay, and what should I change in future uploads?
+1. How does performance differ across combinations
+   of football relevance and release relevance?
 
-## Analysis Questions
+2. Do these relationships change across content types?
 
-1. Which videos and content types generate the strongest click-through rates?
+3. How do video duration and content format relate
+   to viewer retention and engaged views?
 
-2. Which videos and content types retain viewers most effectively?
+4. How does the relationship between CTR and retention
+   differ across content types?
 
-3. What title and thumbnail characteristics are associated with higher or lower CTR?
-
-4. How does video length relate to viewer retention?
-
-5. Are certain topics or video series consistently stronger than others?
-
-6. Are there identifiable combinations of strong packaging and strong retention?
-
-7. How much do unusually high-performing videos affect the overall results?
-
-8. Based on the historical data, what changes should I test in future uploads?
-
-## Scope
-
-The analysis will use video-level data from approximately 50+ videos published on the Lannkz YouTube channel.
-
-The project will focus primarily on packaging, retention, and content characteristics. Findings will describe patterns and associations in the historical data rather than assuming that any observed relationship proves causation.
+5. Which observed patterns are robust to outliers,
+   and which depend on a small number of successful videos?

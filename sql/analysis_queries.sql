@@ -1,4 +1,8 @@
-
+-- Lannkz YouTube Analysis | SQLite 3.25+ (window functions)
+-- Run against the `videos` table populated from data/processed/lannkz_videos_cleaned.csv.
+-- CTR and avg_percentage_viewed are percentage points (e.g. 4.9 = 4.9%).
+-- Engaged views are lifetime totals at the export snapshot, not age-normalized.
+-- Unweighted averages are per-video averages.
 
 -- 01. Channel Performance Baseline
 
@@ -78,7 +82,7 @@ ORDER BY
 
 
 -- 05. Performance by Football Relevance
--- Compare videos based on their use of real-world football analysis.
+-- Compare videos by real-world football connections in topic and/or analysis.
 
 SELECT
     football_relevance,
@@ -144,11 +148,142 @@ SELECT
     COUNT(*) AS video_count,
     ROUND(
         SUM(x * y) /
-        SQRT(SUM(x * x) * SUM(y * y)),
+        NULLIF(SQRT(SUM(x * x) * SUM(y * y)), 0),
         3
     ) AS ctr_retention_correlation
 FROM centered
 GROUP BY content_type
 ORDER BY video_count DESC;
 
+-- 08. Football Relevance x Release Relevance (MAIN RESEARCH QUESTION)
+-- Median uses SQLite integer division; groups with small n are exploratory.
+WITH ranked AS (
+    SELECT football_relevance, release_relevance, ctr,
+           avg_percentage_viewed, engaged_views,
+           ROW_NUMBER() OVER (
+               PARTITION BY football_relevance, release_relevance
+               ORDER BY engaged_views
+           ) AS rn,
+           COUNT(*) OVER (
+               PARTITION BY football_relevance, release_relevance
+           ) AS n
+    FROM videos
+)
+SELECT football_relevance, release_relevance,
+       COUNT(*) AS video_count,
+       ROUND(AVG(ctr), 2) AS avg_ctr,
+       ROUND(AVG(avg_percentage_viewed), 2) AS avg_retention,
+       ROUND(AVG(engaged_views), 0) AS mean_engaged_views,
+       ROUND(AVG(CASE WHEN rn IN ((n+1)/2, (n+2)/2)
+                      THEN engaged_views END), 0) AS median_engaged_views
+FROM ranked
+GROUP BY football_relevance, release_relevance
+ORDER BY CASE football_relevance WHEN 'Low' THEN 1 WHEN 'Medium' THEN 2 ELSE 3 END,
+         CASE release_relevance WHEN 'Low' THEN 1 WHEN 'Medium' THEN 2 ELSE 3 END;
 
+-- 09. Release Relevance WITHIN Content Types (Finding 5)
+WITH ranked AS (
+    SELECT content_type, release_relevance, ctr,
+           avg_percentage_viewed, engaged_views,
+           ROW_NUMBER() OVER (
+               PARTITION BY content_type, release_relevance
+               ORDER BY engaged_views
+           ) AS rn,
+           COUNT(*) OVER (
+               PARTITION BY content_type, release_relevance
+           ) AS n
+    FROM videos
+)
+SELECT content_type, release_relevance,
+       COUNT(*) AS video_count,
+       ROUND(AVG(ctr), 2) AS avg_ctr,
+       ROUND(AVG(avg_percentage_viewed), 2) AS avg_retention,
+       ROUND(AVG(engaged_views), 0) AS mean_engaged_views,
+       ROUND(AVG(CASE WHEN rn IN ((n+1)/2, (n+2)/2)
+                      THEN engaged_views END), 0) AS median_engaged_views
+FROM ranked
+GROUP BY content_type, release_relevance
+ORDER BY content_type,
+         CASE release_relevance WHEN 'Low' THEN 1 WHEN 'Medium' THEN 2 ELSE 3 END;
+
+-- 10. Football Relevance WITHIN Content Types
+-- Caution: content type and football relevance overlap strongly.
+WITH ranked AS (
+    SELECT content_type, football_relevance, ctr,
+           avg_percentage_viewed, engaged_views,
+           ROW_NUMBER() OVER (
+               PARTITION BY content_type, football_relevance
+               ORDER BY engaged_views
+           ) AS rn,
+           COUNT(*) OVER (
+               PARTITION BY content_type, football_relevance
+           ) AS n
+    FROM videos
+)
+SELECT content_type, football_relevance,
+       COUNT(*) AS video_count,
+       ROUND(AVG(ctr), 2) AS avg_ctr,
+       ROUND(AVG(avg_percentage_viewed), 2) AS avg_retention,
+       ROUND(AVG(engaged_views), 0) AS mean_engaged_views,
+       ROUND(AVG(CASE WHEN rn IN ((n+1)/2, (n+2)/2)
+                      THEN engaged_views END), 0) AS median_engaged_views
+FROM ranked
+GROUP BY content_type, football_relevance
+ORDER BY content_type,
+         CASE football_relevance WHEN 'Low' THEN 1 WHEN 'Medium' THEN 2 ELSE 3 END;
+
+-- 11. FC25 Sensitivity Check: General Analysis by Football Relevance
+-- These two creative player-card videos are retained in the full dataset.
+-- Exclude them ONLY in the sensitivity scenario using their stable video IDs.
+WITH scenarios AS (
+    SELECT 'All General Analysis' AS scenario, *
+    FROM videos WHERE content_type = 'General Analysis'
+    UNION ALL
+    SELECT 'Excluding two FC25 videos' AS scenario, *
+    FROM videos
+    WHERE content_type = 'General Analysis'
+      AND video_id NOT IN ('tsLxYAb1VHQ', 'VXTR3aEmaD0')
+), ranked AS (
+    SELECT scenario, football_relevance, engaged_views, ctr,
+           avg_percentage_viewed,
+           ROW_NUMBER() OVER (
+               PARTITION BY scenario, football_relevance
+               ORDER BY engaged_views
+           ) AS rn,
+           COUNT(*) OVER (
+               PARTITION BY scenario, football_relevance
+           ) AS n
+    FROM scenarios
+)
+SELECT scenario, football_relevance,
+       COUNT(*) AS video_count,
+       ROUND(AVG(ctr), 2) AS avg_ctr,
+       ROUND(AVG(avg_percentage_viewed), 2) AS avg_retention,
+       ROUND(AVG(engaged_views), 0) AS mean_engaged_views,
+       ROUND(AVG(CASE WHEN rn IN ((n+1)/2, (n+2)/2)
+                      THEN engaged_views END), 0) AS median_engaged_views
+FROM ranked
+GROUP BY scenario, football_relevance
+ORDER BY scenario,
+         CASE football_relevance WHEN 'Low' THEN 1 WHEN 'Medium' THEN 2 ELSE 3 END;
+
+-- 12. Content Type Composition of Each Relevance Combination
+-- Helps identify confounding by video format.
+SELECT football_relevance, release_relevance, content_type,
+       COUNT(*) AS video_count
+FROM videos
+GROUP BY football_relevance, release_relevance, content_type
+ORDER BY football_relevance, release_relevance, video_count DESC;
+
+-- 13. Overall CTR vs. Retention Pearson Correlation
+-- Descriptive association; not a causal estimate.
+WITH means AS (
+    SELECT AVG(ctr) AS mx, AVG(avg_percentage_viewed) AS my FROM videos
+), centered AS (
+    SELECT ctr - mx AS x, avg_percentage_viewed - my AS y
+    FROM videos CROSS JOIN means
+)
+SELECT COUNT(*) AS video_count,
+       ROUND(SUM(x*y) / NULLIF(SQRT(SUM(x*x)*SUM(y*y)),0), 3)
+           AS ctr_retention_correlation
+FROM centered;
